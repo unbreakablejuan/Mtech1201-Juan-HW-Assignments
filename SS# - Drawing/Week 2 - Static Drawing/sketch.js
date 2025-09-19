@@ -7,8 +7,12 @@ function setup() {
 
 function draw() {
   strokeWeight(5)
+  
+
   stroke('yellow')
   rect(600,400, 1100,750,50,50,50,50)
+    scale(mouseX/1000)
+
   fill(0,0,0)
   rect(600,400,150,200)
   circle(600,370, 50)
@@ -33,8 +37,13 @@ function draw() {
   strokeWeight(8)
   stroke('red')
   
-  line(480,0,480,800)
-  line(720,0,720,800)
+  let i = abs(mouseX-width/2)
+  let x1=map(i,0,width/2, width/2-50,50)
+
+  line(x1,0,x1,800)
+  line(width-x1,0,width-x1,800)
+  
+   //line(720,0,720,800)
 
 }
 
