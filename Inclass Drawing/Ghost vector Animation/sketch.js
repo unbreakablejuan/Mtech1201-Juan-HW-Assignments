@@ -25,11 +25,11 @@ function draw() {
   // Layout
   const ghostCX = width / 2;
   const ghostCY = height / 8;
-  const eyeLevel = ghostCY - 20 + 25; // matches your original offsets
+  const eyeLevel = ghostCY - 20 + 25; // eye offsets
   const leftEyeX = width / 2 - 50;
   const rightEyeX = width / 2 + 50;
 
-  // Draw ghost body
+  // ghost body
   fill(255);
   circle(ghostCX, ghostCY, 200);
   rectMode(CENTER);
