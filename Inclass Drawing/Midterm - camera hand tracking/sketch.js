@@ -10,7 +10,7 @@ let easy = 0.009,
 let newX = 0,
   newY = 0;
 
-// === Hand tracking variables ===1
+// Hand tracking variables 
 let handPose, video;
 let hands = [];
 let handX = 0,
@@ -64,7 +64,7 @@ function draw() {
   } else if (difficulty === "Hard") {
     speed = hard;
   } else {
-    speed = medium; // default
+    speed = medium; // default speed
   }
   x = lerp(x, newX, speed);
   y = lerp(y, newY, speed);
@@ -80,15 +80,16 @@ function draw() {
   let d = dist(handX, handY, x, y);
   if (d < 100) {
     count++;
-    //newPoint();
+    //newPoint(); - removed because this cause the ghost to get stuck looking for new direction 
   }
 
   // Display score
   noStroke();
   fill(255, 255, 0);
-  text("Score: " + count, width / 2, height - 50);
+  text("Press r to reset. Score: " + count, width / 2, height - 50);
   text("Difficulty: " + difficulty, width / 2, height - 75);
   text("Press 1=Easy, 2=Medium, 3=Hard", width / 2, height - 100);
+  
 }
 
 function newPoint() {
@@ -101,6 +102,7 @@ function keyPressed() {
   if (key === "1") difficulty = "Easy";
   if (key === "2") difficulty = "Medium";
   if (key === "3") difficulty = "Hard";
+  if (key === 'r') count=0;
 }
 
 // Hand tracking callback

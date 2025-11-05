@@ -1,18 +1,369 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Monster‑Lympics Scoreboard</title>
+  <!--
+    HOW TO USE
+    ==========
+    1) Put this file and your background image in the same folder.
+       Rename your background to bg.png (or change CSS --bg-url).
+    2) Open with ?mode=display on the projector (read‑only view), e.g.
+       index.html?mode=display
+    3) Open with ?mode=control on your phone to enter results, e.g.
+       index.html?mode=control
+    4) By default, data sync uses Local mode (works on one device).
+       To sync across multiple devices, add your Firebase config below,
+       then add `&sync=firebase` to both URLs.
 
-    <title>Sketch</title>
+    Points per finish: 1st=10, 2nd=8, 3rd=6, 4th=4.
+  -->
+  <style>
+    :root{
+      --accent:#16ffbd;
+      --neon:#16ffbd;
+      --fg:#e7e7e7;
+      --muted:#a2a2a2;
+      --bg:#0f0f10;
+      --glass:rgba(0,0,0,.35);
+      --bg-url:url('bg.png'); /* <- change if needed */
+    }
+    html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif;background:#111;color:var(--fg);}
+    .stage{
+      position:relative;min-height:100%;
+      background-image:var(--bg-url);
+      background-size:cover;background-position:center; 
+      /* add a subtle vignette frame */
+      box-shadow:inset 0 0 0 6px rgba(0,0,0,.65), inset 0 0 80px 30px rgba(0,0,0,.65);
+    }
+    .scrim{position:absolute;inset:0;background:radial-gradient(transparent, rgba(0,0,0,.45) 60%, rgba(0,0,0,.75));}
 
-    <link rel="stylesheet" type="text/css" href="style.css">
+    /* Header */
+    .header{position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem clamp(1rem,4vw,2rem);}
+    .logo{font-weight:900;letter-spacing:.04em;text-shadow:0 6px 18px #000;filter: drop-shadow(0 3px 6px rgba(0,0,0,.7));}
+    .logo .big{font-size:clamp(22px,5vw,44px);text-transform:uppercase}
+    .badges{display:flex;gap:.5rem;align-items:center}
+    .badge{background:var(--glass);border:1px solid rgba(255,255,255,.1);padding:.35rem .6rem;border-radius:999px;font-size:.9rem;backdrop-filter:blur(6px)}
 
-    <script src="libraries/p5.min.js"></script>
-    <script src="libraries/p5.sound.min.js"></script>
-  </head>
+    /* Board */
+    .board{position:relative;z-index:1;display:grid;grid-template-columns: 1.2fr repeat(5, .8fr) 1fr;gap:8px;padding:clamp(8px,2vw,18px);margin:0 clamp(8px,3vw,24px) clamp(10px,2vw,16px);border-radius:16px;background:rgba(0,0,0,.25);backdrop-filter: blur(4px);border:1px solid rgba(255,255,255,.08)}
+    .cell{padding:.7rem .6rem;border-radius:10px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.06)}
+    .head.cell{background:rgba(255,255,255,.07);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+    .team{display:flex;align-items:center;gap:.6rem;font-weight:700}
+    .swatch{width:14px;height:14px;border-radius:3px;box-shadow:0 0 0 2px rgba(255,255,255,.2) inset}
 
-  <body>
-    <script src="sketch.js"></script>
-  </body>
+    .row{display:contents}
+    .rank-bubble{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:#202225;font-weight:800}
+    .pts{font-variant-numeric: tabular-nums;}
+
+    /* Control panel */
+    .panel{position:relative;z-index:2;display:none;padding:1rem clamp(1rem,4vw,2rem) 2rem}
+    .panel.active{display:block}
+    .panel h2{margin:.2rem 0 1rem}
+    .lane{display:flex;flex-wrap:wrap;gap:.5rem;margin:.4rem 0 1rem}
+    .btn{appearance:none;border:1px solid rgba(255,255,255,.15);background:rgba(0,0,0,.55);color:#f4f4f4;border-radius:10px;padding:.6rem .9rem;font-weight:700;cursor:pointer;transition:.15s transform ease, .15s background ease}
+    .btn:hover{transform:translateY(-1px)}
+    .btn.primary{background:linear-gradient(180deg, #12ffd8 0%, #07c09e 100%);color:#001a17;border:none}
+    .btn.ghost{background:rgba(255,255,255,.08)}
+    .btn.small{padding:.35rem .6rem;border-radius:8px;font-weight:800}
+    .pill{font-size:.8rem;opacity:.75;margin-left:.35rem}
+    .order{display:flex;gap:.4rem;min-height:44px;align-items:center;flex-wrap:wrap}
+    .chip{background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:.35rem .6rem;font-weight:800}
+
+    .footer{position:relative;z-index:2;display:flex;justify-content:space-between;gap:.5rem;padding:.6rem clamp(1rem,4vw,2rem) 1.4rem;color:var(--muted);font-size:.9rem}
+    .link{color:var(--fg)}
+
+    /* Creepy crawlers */
+    .fx-layer{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+    .crawler{position:absolute;font-size:clamp(18px, 3vw, 42px); filter: drop-shadow(0 3px 6px rgba(0,0,0,.6));}
+    @keyframes driftX { from { transform: translateX(-10%); } to { transform: translateX(110%);} }
+    @keyframes driftY { from { transform: translateY(-10%); } to { transform: translateY(110%);} }
+  </style>
+</head>
+<body>
+  <div class="stage" id="stage">
+    <div class="scrim"></div>
+
+    <header class="header">
+      <div class="logo">
+        <div class="big">Monster‑Lympics</div>
+        <div style="opacity:.8">Live Scoreboard</div>
+      </div>
+      <div class="badges" id="badges"></div>
+    </header>
+
+    <section class="board" id="board"></section>
+
+    <!-- Control panel (phone) -->
+    <section class="panel" id="panel">
+      <h2>Enter Round Results <span class="pill" id="roundPill"></span></h2>
+      <div id="controlArea"></div>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.6rem">
+        <button class="btn primary" id="commitBtn">Commit Round</button>
+        <button class="btn ghost" id="undoBtn">Undo Last Round</button>
+        <button class="btn ghost" id="resetBtn">Reset Tournament</button>
+      </div>
+    </section>
+
+    <div class="fx-layer" id="fx"></div>
+
+    <footer class="footer">
+      <div id="modeHint"></div>
+      <div>Tip: open <span class="link">?mode=control</span> on your phone.</div>
+    </footer>
+  </div>
+
+  <!-- Firebase (optional real‑time sync). Only used if sync=firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+
+  <script>
+  /********************
+   * CONFIG
+   ********************/
+  const TEAM_COLORS = ['#ff6b6b','#ffd166','#06d6a0','#4dabf7'];
+  const TEAM_NAMES_DEFAULT = ['Team Dracula','Team Mummy','Team Wolfman','Team Witch'];
+  const GAMES = 5;
+  const POINTS = [10,8,6,4]; // 1st..4th
+
+  // Optional Firebase config — fill to enable cross‑device sync
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_PROJECT.firebaseapp.com",
+    databaseURL: "https://YOUR_PROJECT-default-rtdb.firebaseio.com",
+    projectId: "YOUR_PROJECT",
+    storageBucket: "YOUR_PROJECT.appspot.com",
+    messagingSenderId: "000000000000",
+    appId: "1:000000000000:web:xxxxxxxxxxxxxxxx"
+  };
+
+  const params = new URLSearchParams(location.search);
+  const MODE = params.get('mode') || 'display'; // 'display' | 'control'
+  const SYNC = (params.get('sync')||'local').toLowerCase(); // 'local' | 'firebase'
+
+  const el = sel => document.querySelector(sel);
+  const board = el('#board');
+  const panel = el('#panel');
+  const badges = el('#badges');
+  const modeHint = el('#modeHint');
+
+  // Tournament state
+  const initialState = () => ({
+    teams: TEAM_NAMES_DEFAULT.map((name,i)=>({ id:`t${i+1}`, name, color: TEAM_COLORS[i%TEAM_COLORS.length] })),
+    rounds: [], // each round: [teamId1, teamId2, teamId3, teamId4] ordered 1st..4th
+  });
+
+  // Storage adapter (local or firebase)
+  const Storage = (()=>{
+    const KEY='monsterlympics.v1';
+    if(SYNC==='firebase'){
+      try{
+        const app = firebase.initializeApp(firebaseConfig);
+        const db = firebase.database(app);
+        const room = location.hash.replace('#','') || 'default-room';
+        const ref = db.ref('rooms/'+room);
+        return {
+          onChange(fn){ ref.on('value', snap=>{ fn(snap.val()||initialState()); }); },
+          async write(data){ await ref.set(data); }
+        };
+      }catch(e){
+        console.warn('Firebase init failed, falling back to local.', e);
+      }
+    }
+    // Local fallback (same-device)
+    return {
+      onChange(fn){
+        window.addEventListener('storage',()=>fn(read()));
+        fn(read());
+      },
+      write(data){ localStorage.setItem(KEY, JSON.stringify(data)); render(data); },
+    };
+
+    function read(){ try{ return JSON.parse(localStorage.getItem(KEY)) || initialState(); }catch{ return initialState(); }
+    }
+  })();
+
+  // UI render
+  function render(state){
+    // badges
+    badges.innerHTML='';
+    badges.append(badge(`Mode: ${MODE}`));
+    badges.append(badge(`Sync: ${SYNC}`));
+    if(SYNC==='firebase') badges.append(badge(`Room: ${location.hash||'#default-room'}`));
+
+    // header hint
+    modeHint.textContent = (MODE==='display') ? 'Display‑only view' : 'Control view';
+
+    // prepare tallies
+    const perGamePoints = Array.from({length: state.teams.length},()=>Array(GAMES).fill(0));
+    const totals = Array(state.teams.length).fill(0);
+
+    state.rounds.forEach((order, rndIdx)=>{
+      order.forEach((teamId, placeIdx)=>{
+        const tIndex = state.teams.findIndex(t=>t.id===teamId);
+        if(tIndex>-1 && rndIdx<GAMES){
+          const pts = POINTS[placeIdx]||0;
+          perGamePoints[tIndex][rndIdx] = pts;
+          totals[tIndex]+=pts;
+        }
+      });
+    });
+
+    // sort display rows by total desc
+    const displayOrder = state.teams
+      .map((t,i)=>({t, i, total: totals[i]}))
+      .sort((a,b)=>b.total - a.total);
+
+    // header row
+    const header = [
+      h('div',{class:'head cell'},'Team'),
+      ...Array.from({length:GAMES},(_,i)=>h('div',{class:'head cell', style:'text-align:center'},`Game ${i+1}`)),
+      h('div',{class:'head cell',style:'text-align:right'},'Total')
+    ];
+
+    board.innerHTML='';
+    board.append(...header);
+
+    displayOrder.forEach(({t,i, total})=>{
+      board.append(
+        // team cell
+        h('div',{class:'cell team'},
+          h('span',{class:'swatch',style:`background:${t.color}`}),
+          t.name
+        ),
+        // per game
+        ...perGamePoints[i].map(pts=>h('div',{class:'cell',style:'text-align:center'}, pts? pts: '—')),
+        // total
+        h('div',{class:'cell pts', style:'text-align:right;font-weight:900'}, total)
+      );
+    });
+
+    // control panel if needed
+    if(MODE==='control') buildControl(state);
+  }
+
+  function buildControl(state){
+    panel.classList.add('active');
+    const controlArea = el('#controlArea');
+    const roundIdx = state.rounds.length; // next round index
+    el('#roundPill').textContent = `(Round ${roundIdx+1} of ${GAMES})`;
+
+    controlArea.innerHTML='';
+
+    if(roundIdx>=GAMES){
+      controlArea.append(h('div',{},'All rounds complete. Use Reset to start over, or Undo to modify.'));
+      return;
+    }
+
+    // Order builder
+    const order = [];
+    const lane = h('div',{class:'lane'});
+    state.teams.forEach((t)=>{
+      const b = h('button',{class:'btn small', onclick:()=>{
+        if(order.includes(t.id)) return; // no duplicates
+        order.push(t.id);
+        orderBox.append(chip(t.name));
+        b.disabled=true;
+      }}, t.name);
+      lane.append(b);
+    });
+
+    const orderBox = h('div',{class:'order'});
+
+    controlArea.append(
+      h('div',{}, h('strong',{},'Tap teams in finishing order: 1st → 4th')), 
+      lane,
+      h('div',{}, 'Order:'),
+      orderBox
+    );
+
+    el('#commitBtn').onclick = ()=>{
+      if(order.length!==state.teams.length){
+        alert('Please add all 4 teams in finishing order.'); return;
+      }
+      const next = {...state, rounds: [...state.rounds, order]};
+      write(next);
+    };
+
+    el('#undoBtn').onclick = ()=>{
+      if(!state.rounds.length) return;
+      const next = {...state, rounds: state.rounds.slice(0,-1)};
+      write(next);
+    };
+
+    el('#resetBtn').onclick = ()=>{
+      if(confirm('Reset the entire tournament?')) write(initialState());
+    };
+  }
+
+  function write(next){
+    if(SYNC==='firebase')
+      Storage.write(next);
+    else{
+      // local write triggers immediate render
+      Storage.write(next);
+    }
+  }
+
+  // helpers
+  function h(tag, attrs={}, ...kids){
+    const el = document.createElement(tag);
+    for(const [k,v] of Object.entries(attrs||{})){
+      if(k==='class') el.className=v;
+      else if(k==='style') el.setAttribute('style',v);
+      else if(k.startsWith('on')) el.addEventListener(k.slice(2),v);
+      else el.setAttribute(k,v);
+    }
+    kids.flat().forEach(k=>{
+      if(k==null) return;
+      el.append(k.nodeType? k : document.createTextNode(String(k)));
+    });
+    return el;
+  }
+  const badge = (txt)=>{ const b=h('div',{class:'badge'},txt); return b; };
+  const chip  = (txt)=> h('div',{class:'chip'},txt);
+
+  // Creepy crawlers layer
+  function spawnCrawlers(){
+    const layer = el('#fx');
+    layer.innerHTML='';
+    const icons = ['🕷️','🦇','🪲','🕸️','🦟'];
+    const N = 12;
+    for(let i=0;i<N;i++){
+      const c = h('div',{class:'crawler'} , icons[Math.floor(Math.random()*icons.length)]);
+      const rot = Math.floor(Math.random()*360);
+      const dur = 12 + Math.random()*18;
+      const delay = Math.random()*-dur;
+      const dir = Math.random()<.5 ? 'X' : 'Y';
+      c.style.left = (Math.random()*90)+'%';
+      c.style.top  = (Math.random()*90)+'%';
+      c.style.transform = `rotate(${rot}deg)`;
+      c.style.animation = `${dir==='X'?'driftX':'driftY'} ${dur}s linear ${delay}s infinite`;
+      layer.append(c);
+    }
+  }
+
+  // kick off
+  Storage.onChange(render);
+  spawnCrawlers();
+  setInterval(spawnCrawlers, 16000);
+
+  // Expose quick edit for team names (double‑click on labels)
+  board.addEventListener('dblclick', (e)=>{
+    const cell = e.target.closest('.team');
+    if(!cell) return;
+    const nameEl = cell.childNodes[1];
+    const current = nameEl.textContent.trim();
+    const next = prompt('Rename team:', current);
+    if(!next || next===current) return;
+
+    // update state
+    Storage.onChange((state)=>{
+      const t = state.teams.find(t=>t.name===current);
+      if(t){ t.name = next; write(state); }
+    });
+  });
+  </script>
+</body>
 </html>

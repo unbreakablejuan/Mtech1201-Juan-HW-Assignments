@@ -1,10 +1,4 @@
-/* ============================
-   SPOOKY EYES — DROP-IN SKETCH
-   - One pair of scary eyes that track your face (ml5 FaceMesh)
-   - Unified gaze (no cross-eye), deadzone + smoothing (no center spaz)
-   - Slit pupils, red glow, jagged lids, random blinks, micro-saccades
-   - EASY WIDTH SPACING: change EYE_SPACING below
-   ============================ */
+
 
 // ======= EASY KNOB: spacing between eye centers (in pixels) =======
 const EYE_SPACING = 400;   // 👈 make wider (e.g., 360) or closer (e.g., 180)

@@ -55,7 +55,7 @@ function draw() {
     text('Choose a mode to start', width/2, height/2 + 275);
 
   } else if (mode === "game-mouse") {
-    // ===== YOUR SLIMER GAME (MOUSE INPUT) =====
+    
     hideButtons();
     gameMouseUpdate();
     gameMouseRender();
@@ -74,7 +74,7 @@ function draw() {
   }
 }
 
-// ----------------- SCENE CONTROL -----------------
+// Scene Control
 function startGameMouse() {
   mode = "game-mouse";
   gameMouseInit();
@@ -131,6 +131,7 @@ function keyPressed() {
     if (key === '1') difficulty = "Easy";
     else if (key === '2') difficulty = "Medium";
     else if (key === '3') difficulty = "Hard";
+    if (key === 'r') count=0;
   }
 }
 
@@ -160,7 +161,7 @@ function gameMouseUpdate() {
   } else if (difficulty === "Hard") {
     speed = hard;
   } else {
-    speed = medium; // fallback default
+    speed = medium; // default
   }
 
   x = lerp(x, newX, speed);
@@ -174,7 +175,7 @@ function gameMouseUpdate() {
 }
 
 function gameMouseRender() {
-  // Background image (full screen)
+  //Background
   image(hallway, width/2, height/2, width, height);
 
   // Slimer sprite
@@ -193,11 +194,12 @@ function gameMouseRender() {
   textSize(24);
   text("Score: " + count, width / 2, height - 50);
   text("Difficulty: " + difficulty, width / 2, height - 80);
+  
 
   // HUD
     fill(255,255,0);
     textSize(14);
-    text("Press ESC to return to menu (1=Easy, 2=Medium, 3=Hard)", width/2, height-20);
+    text("Press ESC to return to menu (1=Easy, 2=Medium, 3=Hard) R=Reset Score", width/2, height-20);
 }
 
 function newPoint() {
