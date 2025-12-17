@@ -204,7 +204,7 @@ function bandResponse(energy, gain, floor, ceiling, curve = 0.6) {
 
 //   P5 SETUP / DRAW
 function setup() {
-  createCanvas(windowWidth, windowHeight);
+  createCanvas(windowWidth, windowHeight, WEBGL);
   rectMode(CENTER);
   colorMode(HSB, 360, 100, 100);
 
@@ -260,6 +260,8 @@ function setup() {
 
 function draw() {
   background(bgColor);
+
+  orbitControl();
 
   // === AUDIO / FFT ===
   if (mic && mic.enabled) {

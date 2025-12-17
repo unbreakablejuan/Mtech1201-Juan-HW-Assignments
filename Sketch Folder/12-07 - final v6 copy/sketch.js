@@ -3,6 +3,8 @@ let fft;
 let peakDetect;
 let faces = [];
 let bgColor;
+let canvascolor
+
 
 let bassN = 0;
 let midN = 0;
@@ -12,28 +14,30 @@ let bassGain = 0.4;
 let midGain = 1.0;
 let trebleGain = 2.0;
 
-let bassSlider, midSlider, trebleSlider, faceColSlider, faceRowSlider;
+let bassSlider, midSlider, trebleSlider;
 let showEQ = false;
 
-let faceCol = 1;
-let faceRow = 1;
-
 let autoPalette = false;  // peak detection default state/ false = no change, true = color changing
-let cellW, cellH;
 
-let shakeoffset = 15
+let shakeoffset = 15;
+
+// cube size for WEBGL
+let cubeSize = 300;
+
+// textures
+let faceTextures = [];
 
 //  EYE SHAPES
-// All take (x, y, cellW, cellH, size)
+// All take (pg, x, y, cellW, cellH, size)
 let eyeShapes = [
   // Rectangle eye
-  (x, y, cellW, cellH, size) => {
-    rect(x, y, cellW / size, cellH / size);
+  (pg, x, y, cellW, cellH, size) => {
+    pg.rect(x, y, cellW / size, cellH / size);
   },
 
   // Triangle eye
-  (x, y, cellW, cellH, size) => {
-    triangle(
+  (pg, x, y, cellW, cellH, size) => {
+    pg.triangle(
       x - (cellW / size) / 2, y + (cellH / size) / 2,
       x,                      y - (cellH / size) / 2,
       x + (cellW / size) / 2, y + (cellH / size) / 2
@@ -41,20 +45,19 @@ let eyeShapes = [
   },
 
   // Circle eye
-  (x, y, cellW, cellH, size) => {
-    circle(x, y, min(cellW / size, cellH / size));
+  (pg, x, y, cellW, cellH, size) => {
+    pg.circle(x, y, min(cellW / size, cellH / size));
   },
 
   // Ellipse eye
-  (x, y, cellW, cellH, size) => {
-    ellipse(x, y, cellW / size, cellH / size);
+  (pg, x, y, cellW, cellH, size) => {
+    pg.ellipse(x, y, cellW / size, cellH / size);
   }
 ];
 
-
 class Face {
   constructor(baseHue, s, b, bandName) {
-    this.shapeSizeRandomizer = random(3, 10);   // per-face size
+    this.shapeSizeRandomizer = random(3, 10);   // per-face size randomizer
     this.bandName = bandName;                  // "bass", "mid", or "treble"
 
     this.offset = 5;
@@ -66,7 +69,7 @@ class Face {
     this.leftEyeRan = random(4, 8);
     this.rightEyeRan = random(4, 8);
     this.mouthWidth = random(2, 5);
-    this.mouthYloc = random(0, cellH / 3);
+    this.mouthYloc = 0; 
 
     // colors 
     this.c1 = color(baseHue, s, b);
@@ -82,11 +85,7 @@ class Face {
     // each face gets its own eye shapes
     this.leftShape  = random(eyeShapes);
     this.rightShape = random(eyeShapes);
-
-
-  
   }
-
 
   updateBlink() {
     let now = millis();
@@ -116,42 +115,41 @@ class Face {
     return 0;
   }
 
-  drawFace(cx, cy, cellW, cellH) {
+  // draw into "pg" (a p5.Graphics)
+  drawFace(pg, cx, cy, cellW, cellH) {
     this.updateBlink();
 
-    // ==== EYES ====
-    let eyeW = this.intialEyeW;
-    let eyeH = this.intialEyeH * this.eyeOpenAmount;
     let offset = this.offset;
-    let size = this.shapeSizeRandomizer; // <-- per-face scaling
+    let size = this.shapeSizeRandomizer;
 
-    noStroke();
+    pg.noStroke();
 
     // eye locations
-    let leftEyeX  = (cx - cellW / this.leftEyeRan);
+    let leftEyeX  = cx - cellW / this.leftEyeRan;
     let leftEyeY  = cy - cellH / this.leftEyeRan;
     let rightEyeX = cx + cellW / this.rightEyeRan;
     let rightEyeY = cy - cellH / this.rightEyeRan;
 
+    // ==== EYES ====
     // Left eye offset
-    fill(this.c3);
-    this.leftShape(leftEyeX, leftEyeY, cellW, cellH, size);
+    pg.fill(this.c3);
+    this.leftShape(pg, leftEyeX, leftEyeY, cellW, cellH, size);
 
     // Left Eye Main
-    fill(this.c1);
-    this.leftShape(leftEyeX - offset, leftEyeY - offset, cellW, cellH, size);
+    pg.fill(this.c1);
+    this.leftShape(pg, leftEyeX - offset, leftEyeY - offset, cellW, cellH, size);
 
     // Right eye offset
-    fill(this.c3);
-    this.rightShape(rightEyeX, rightEyeY, cellW, cellH, size);
+    pg.fill(this.c3);
+    this.rightShape(pg, rightEyeX, rightEyeY, cellW, cellH, size);
 
     // Right Eye main
-    fill(this.c1);
-    this.rightShape(rightEyeX - offset, rightEyeY - offset, cellW, cellH, size);
+    pg.fill(this.c1);
+    this.rightShape(pg, rightEyeX - offset, rightEyeY - offset, cellW, cellH, size);
 
     // ==== MOUTH ====
-    fill(this.c3);
-    noStroke();
+    pg.fill(this.c3);
+    pg.noStroke();
 
     let bandVal = this.getBandLevel(); // 0–1
     let mouthLevel = pow(bandVal, 0.7);
@@ -162,11 +160,13 @@ class Face {
     let targetMouthH = map(mouthLevel, 0, 1, minMouthHeight, maxMouthHeight, true);
     this.mouthH = lerp(this.mouthH, targetMouthH, 1);
 
-    rect(cx, cy + this.mouthYloc, cellW / this.mouthWidth, this.mouthH);
-    fill(this.c1);
-    rect(
+    let mouthY = cy + cellH * 0.2; // lower than center
+
+    pg.rect(cx, mouthY, cellW / this.mouthWidth, this.mouthH);
+    pg.fill(this.c1);
+    pg.rect(
       cx - offset,
-      (cy + this.mouthYloc) - offset,
+      mouthY - offset,
       (cellW / 4) - offset,
       this.mouthH - offset
     );
@@ -188,7 +188,7 @@ function randomizeColors() {
   }
 }
 
-// one place to handle “W behavior”
+// mouse press color randoimizer
 function triggerPaletteChange() {
   randomizeColors();
 }
@@ -201,40 +201,40 @@ function bandResponse(energy, gain, floor, ceiling, curve = 0.6) {
   return constrain(norm, 0, 1);
 }
 
-
-//   P5 SETUP / DRAW
 function setup() {
-  createCanvas(windowWidth, windowHeight);
+  
+  createCanvas(windowWidth, windowHeight, WEBGL);
   rectMode(CENTER);
   colorMode(HSB, 360, 100, 100);
-
-  cellW = width / faceCol;
-  cellH = height / faceRow;
 
   mic = new p5.AudioIn();
   fft = new p5.FFT(0.8, 1024);
   fft.setInput(mic);
 
-  // Peak detector tuned to low-ish (bass) for tempo-ish behavior
+ 
   peakDetect = new p5.PeakDetect(20, 200, 0.35, 20);
 
-  //this defines the number face to be drawn based on number of rows * columns
-  let numFaces = faceCol * faceRow;
 
-  for (let i = 0; i < numFaces; i++) {
-    let col = i % 3;  // 0,1,2 repeating across columns
-    let bandName = (col === 0) ? "bass" :
-                   (col === 1) ? "mid" : "treble";
-
+  let bands = ["bass", "mid", "treble", "bass", "mid", "treble"];
+  for (let i = 0; i < 6; i++) {
+    let bandName = bands[i];
     let baseHue = random(0, 360);
     let s = 80;
     let b = 95;
     let f = new Face(baseHue, s, b, bandName);
     faces.push(f);
-    if (i === 0) bgColor = f.c2;
+  }
+  bgColor = faces[0].c2;
+
+  // === Create 6 textures for cube faces ===
+  for (let i = 0; i < 6; i++) {
+    let pg = createGraphics(512, 512);  // power of 2 is nice
+    pg.colorMode(HSB, 360, 100, 100);
+    pg.rectMode(CENTER);
+    faceTextures.push(pg);
   }
 
-  // Sliders for EQ
+  
   bassSlider = createSlider(0, 3, bassGain, 0.01);
   midSlider = createSlider(0, 3, midGain, 0.01);
   trebleSlider = createSlider(0, 5, trebleGain, 0.01);
@@ -246,36 +246,25 @@ function setup() {
   bassSlider.hide();
   midSlider.hide();
   trebleSlider.hide();
-
-  //face grid sliders
-  faceColSlider = createSlider(1, 9, 1, 1);
-  faceRowSlider = createSlider(1, 9, 1, 1);
-
-  faceColSlider.position(20, 120);
-  faceRowSlider.position(20, 150);
-  
-  faceColSlider.hide();
-  faceRowSlider.hide();
 }
 
 function draw() {
-  background(bgColor);
 
+canvascolor = (0);
   // === AUDIO / FFT ===
   if (mic && mic.enabled) {
     fft.analyze();
     peakDetect.update(fft);
 
     // Frequency ranges
-    let bassRaw   = fft.getEnergy(20, 120);    // kick / low bass
-    let midRaw    = fft.getEnergy(120, 2000);  // body, vocals, snares
-    let trebleRaw = fft.getEnergy(2000, 8000); // hats / brightness
+    let bassRaw   = fft.getEnergy(20, 120);    //
+    let midRaw    = fft.getEnergy(120, 2000);  // 
+    let trebleRaw = fft.getEnergy(2000, 8000); //
 
     bassGain   = bassSlider.value();
     midGain    = midSlider.value();
     trebleGain = trebleSlider.value();
 
-    // floor, ceiling, curve tuned for more motion
     bassN   = bandResponse(bassRaw,   bassGain,   10, 140, 0.1);
     midN    = bandResponse(midRaw,    midGain,    5,  120, 0.6);
     trebleN = bandResponse(trebleRaw, trebleGain, 2,   80, 0.7);
@@ -287,77 +276,103 @@ function draw() {
     bassN = midN = trebleN = 0;
   }
 
-  // === GRID OF FACES ===
-  let cols = faceCol;
-  let rows = faceRow;
-  let idx = 0;
+  // Update each texture with its own Face 
+  for (let i = 0; i < 6; i++) {
+    let f = faces[i];
+    let pg = faceTextures[i];
 
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      let cx = c * cellW + cellW / 2;
-      let cy = r * cellH + cellH / 2;
+    pg.background(f.c2);
 
-      fill(faces[idx].c2);
-      noStroke();
-      rect(cx, cy, cellW, cellH);
+    // draw a single cell
+    let margin = pg.width * 0.1;
+    let cellW = pg.width - margin * 2;
+    let cellH = pg.height - margin * 2;
+    let cx = pg.width / 2;
+    let cy = pg.height / 2;
 
-      faces[idx].drawFace(cx, cy, cellW, cellH);
-      idx++;
-    }
+    // optional background panel
+    pg.fill(f.c2);
+    pg.noStroke();
+    pg.rect(cx, cy, cellW, cellH);
+
+    f.drawFace(pg, cx, cy, cellW, cellH);
   }
 
-  if (showEQ) {
-    fill(0, 0, 100);
-    noStroke();
-    textSize(14);
-    textAlign(LEFT, CENTER);
 
-    text("Bass Gain",    bassSlider.x * 2 + bassSlider.width, 27);
-    text("Mid Gain",     midSlider.x * 2 + midSlider.width, 57);
-    text("Treble Gain",  trebleSlider.x * 2 + trebleSlider.width, 87);
-    text("Face Columns", faceColSlider.x * 2 + faceColSlider.width, 127);
-    text("Face Rows",    faceRowSlider.x * 2 + faceRowSlider.width, 157);
-    
-    //update face grid based on slider values 
-    let newFaceCol = faceColSlider.value();
-    let newFaceRow = faceRowSlider.value();
-    
-    if (newFaceCol !== faceCol || newFaceRow !== faceRow) {
-      faceCol = newFaceCol;
-      faceRow = newFaceRow;
-      cellW = width / faceCol;
-      cellH = height / faceRow;
+background(0);
+orbitControl();
+noStroke();
+  
+let angle = frameCount * 0.01;
+  rotateZ(angle);
+  rotateY(angle);
+  rotateX(angle);
 
-      // Rebuild faces array
-      faces = [];
-      let numFaces = faceCol * faceRow;
-      for (let i = 0; i < numFaces; i++) {
-        let col = i % 3;  // 0,1,2 repeating across columns
-        let bandName = (col === 0) ? "bass" :
-                       (col === 1) ? "mid" : "treble";
+// how much the faces "breathe" with audio
+let pushAmt = cubeSize * 0.5
 
-        let baseHue = random(0, 360);
-        let s = 80;
-        let b = 95;
-        let f = new Face(baseHue, s, b, bandName);
-        faces.push(f);
-      }
-    }
-  }
+
+let a0 = faces[0].getBandLevel(); // FRONT
+let a1 = faces[1].getBandLevel(); // BACK
+let a2 = faces[2].getBandLevel(); // RIGHT
+let a3 = faces[3].getBandLevel(); // LEFT
+let a4 = faces[4].getBandLevel(); // TOP
+let a5 = faces[5].getBandLevel(); // BOTTOM
+
+// FRONT (+Z)
+push();
+translate(0, 0, cubeSize / 2 + a5 * pushAmt);
+texture(faceTextures[0]);
+plane(cubeSize, cubeSize);
+pop();
+
+// BACK (-Z)
+push();
+translate(0, 0, -cubeSize / 2 - a5 * pushAmt);
+rotateY(PI);
+texture(faceTextures[1]);
+plane(cubeSize, cubeSize);
+pop();
+
+// RIGHT (+X)
+push();
+translate(cubeSize / 2 + a5 * pushAmt, 0, 0);
+rotateY(HALF_PI);
+texture(faceTextures[2]);
+plane(cubeSize, cubeSize);
+pop();
+
+// LEFT (-X)
+push();
+translate(-cubeSize / 2 - a5 * pushAmt, 0, 0);
+rotateY(-HALF_PI);
+texture(faceTextures[3]);
+plane(cubeSize, cubeSize);
+pop();
+
+// TOP (-Y)
+push();
+translate(0, -cubeSize / 2 - a5 * pushAmt, 0);
+rotateX(-HALF_PI);
+texture(faceTextures[4]);
+plane(cubeSize, cubeSize);
+pop();
+
+// BOTTOM (+Y)
+push();
+translate(0, cubeSize / 2 + a5 * pushAmt, 0);
+rotateX(HALF_PI);
+texture(faceTextures[5]);
+plane(cubeSize, cubeSize);
+pop();
 }
-
-// Start audio on interaction (required by browser)
 function mousePressed() {
-  if (getAudioContext().state !== 'running') {
-    getAudioContext().resume();
-  }
+  if (getAudioContext().state !== 'running') getAudioContext().resume();
   mic.start();
 }
 
 function touchStarted() {
-  if (getAudioContext().state !== 'running') {
-    getAudioContext().resume();
-  }
+  if (getAudioContext().state !== 'running') getAudioContext().resume();
   mic.start();
 }
 
@@ -368,24 +383,13 @@ function keyPressed() {
       bassSlider.show();
       midSlider.show();
       trebleSlider.show();
-      faceColSlider.show();
-      faceRowSlider.show();
     } else {
       bassSlider.hide();
       midSlider.hide();
       trebleSlider.hide();
-      faceColSlider.hide();
-      faceRowSlider.hide();
     }
   }
 
-  if (key === 'w' || key === 'W') {
-    // manual “tempo change”
-    triggerPaletteChange();
-  }
-
-  if (key === 'e' || key === 'E') {
-    // toggle auto palette change on peaks
-    autoPalette = !autoPalette;
-  }
+  if (key === 'w' || key === 'W') triggerPaletteChange();
+  if (key === 'e' || key === 'E') autoPalette = !autoPalette;
 }
