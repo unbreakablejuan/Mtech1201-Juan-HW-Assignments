@@ -80,7 +80,7 @@ class Face {
     this.eyeOpenAmount = 1.0;
     this.blinkStart = 0;
     this.blinkDuration = 200;
-    this.nextBlink = random(1000, 3000);
+    this.nextBlink = millis() + random(1000, 3000);
 
     // each face gets its own eye shapes
     this.leftShape  = random(eyeShapes);
@@ -115,12 +115,22 @@ class Face {
     return 0;
   }
 
-  // draw into "pg" (a p5.Graphics)
+ 
   drawFace(pg, cx, cy, cellW, cellH) {
     this.updateBlink();
 
     let offset = this.offset;
     let size = this.shapeSizeRandomizer;
+  
+const drawBlinkShape = (shapeFn, x, y) => {
+  let open = max(0.05, this.eyeOpenAmount); // don’t go to 0
+  pg.push();
+  pg.translate(x, y);
+  pg.scale(1, open);          // squish vertically
+  pg.translate(-x, -y);
+  shapeFn(pg, x, y, cellW, cellH, size); // <-- IMPORTANT: pass pg
+  pg.pop();
+};
 
     pg.noStroke();
 
@@ -131,21 +141,21 @@ class Face {
     let rightEyeY = cy - cellH / this.rightEyeRan;
 
     // ==== EYES ====
-    // Left eye offset
-    pg.fill(this.c3);
-    this.leftShape(pg, leftEyeX, leftEyeY, cellW, cellH, size);
+ // Left eye offset
+pg.fill(this.c3);
+drawBlinkShape(this.leftShape, leftEyeX, leftEyeY);
 
-    // Left Eye Main
-    pg.fill(this.c1);
-    this.leftShape(pg, leftEyeX - offset, leftEyeY - offset, cellW, cellH, size);
+// Left eye main
+pg.fill(this.c1);
+drawBlinkShape(this.leftShape, leftEyeX - offset, leftEyeY - offset);
 
-    // Right eye offset
-    pg.fill(this.c3);
-    this.rightShape(pg, rightEyeX, rightEyeY, cellW, cellH, size);
+// Right eye offset
+pg.fill(this.c3);
+drawBlinkShape(this.rightShape, rightEyeX, rightEyeY);
 
-    // Right Eye main
-    pg.fill(this.c1);
-    this.rightShape(pg, rightEyeX - offset, rightEyeY - offset, cellW, cellH, size);
+// Right eye main
+pg.fill(this.c1);
+drawBlinkShape(this.rightShape, rightEyeX - offset, rightEyeY - offset);
 
     // ==== MOUTH ====
     pg.fill(this.c3);
@@ -401,4 +411,7 @@ function keyPressed() {
   if (key === 'e' || key === 'E') autoPalette = !autoPalette;
 }
 
-console.log(t);
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
+}
+

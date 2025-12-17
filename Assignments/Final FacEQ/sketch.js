@@ -125,29 +125,39 @@ class Face {
     let offset = this.offset;
     let size = this.shapeSizeRandomizer; // <-- per-face scaling
 
+  const drawBlinkShape = (shapeFn, x, y) => {
+  let open = max(0.05, this.eyeOpenAmount); // don’t go to exactly 0
+  push();
+  translate(x, y);
+  scale(1, open);       // squish vertically to “close”
+  translate(-x, -y);
+  shapeFn(x, y, cellW, cellH, size);
+  pop();
+};
+
     noStroke();
 
     // eye locations
-    let leftEyeX  = (cx - cellW / this.leftEyeRan) - shakeoffset;
+    let leftEyeX  = cx - cellW / this.leftEyeRan;
     let leftEyeY  = cy - cellH / this.leftEyeRan;
     let rightEyeX = cx + cellW / this.rightEyeRan;
     let rightEyeY = cy - cellH / this.rightEyeRan;
 
     // Left eye offset
-    fill(this.c3);
-    this.leftShape(leftEyeX, leftEyeY, cellW, cellH, size);
+fill(this.c3);
+drawBlinkShape(this.leftShape, leftEyeX, leftEyeY);
 
-    // Left Eye Main
-    fill(this.c1);
-    this.leftShape(leftEyeX - offset, leftEyeY - offset, cellW, cellH, size);
+// Left eye main
+fill(this.c1);
+drawBlinkShape(this.leftShape, leftEyeX - offset, leftEyeY - offset);
 
-    // Right eye offset
-    fill(this.c3);
-    this.rightShape(rightEyeX, rightEyeY, cellW, cellH, size);
+// Right eye offset
+fill(this.c3);
+drawBlinkShape(this.rightShape, rightEyeX, rightEyeY);
 
-    // Right Eye main
-    fill(this.c1);
-    this.rightShape(rightEyeX - offset, rightEyeY - offset, cellW, cellH, size);
+// Right eye main
+fill(this.c1);
+drawBlinkShape(this.rightShape, rightEyeX - offset, rightEyeY - offset);
 
     // ==== MOUTH ====
     fill(this.c3);
@@ -193,7 +203,7 @@ function triggerPaletteChange() {
   randomizeColors();
 }
 
-// Map raw FFT energy (0–255) into a juicy 0–1 response
+// Map raw FFT energy (0–255)
 function bandResponse(energy, gain, floor, ceiling, curve = 0.6) {
   let norm = map(energy, floor, ceiling, 0, 1, true); // clamp 0–1
   norm = pow(norm, curve);   // curve response
@@ -222,7 +232,7 @@ function setup() {
   let numFaces = faceCol * faceRow;
 
   for (let i = 0; i < numFaces; i++) {
-    let col = i % 3;  // 0,1,2 repeating across columns
+    let col = (i + 2) % 3; // shifts: 0->2 (treble), 1->0 (bass), 2->1 (mid);  // 0,1,2 repeating across columns
     let bandName = (col === 0) ? "bass" :
                    (col === 1) ? "mid" : "treble";
 
@@ -276,7 +286,7 @@ function draw() {
     trebleGain = trebleSlider.value();
 
     // floor, ceiling, curve tuned for more motion
-    bassN   = bandResponse(bassRaw,   bassGain,   10, 140, 0.1);
+    bassN   = bandResponse(bassRaw,   bassGain,   10, 140, .5);
     midN    = bandResponse(midRaw,    midGain,    5,  120, 0.6);
     trebleN = bandResponse(trebleRaw, trebleGain, 2,   80, 0.7);
 
@@ -332,7 +342,7 @@ function draw() {
       faces = [];
       let numFaces = faceCol * faceRow;
       for (let i = 0; i < numFaces; i++) {
-        let col = i % 3;  // 0,1,2 repeating across columns
+        let col = (i + 2) % 3; // shifts: 0->2 (treble), 1->0 (bass), 2->1 (mid)
         let bandName = (col === 0) ? "bass" :
                        (col === 1) ? "mid" : "treble";
 
@@ -380,7 +390,7 @@ function keyPressed() {
   }
 
   if (key === 'w' || key === 'W') {
-    // manual “tempo change”
+  
     triggerPaletteChange();
   }
 
@@ -388,4 +398,8 @@ function keyPressed() {
     // toggle auto palette change on peaks
     autoPalette = !autoPalette;
   }
+}
+
+function windowResized() {
+  resizeCanvas(windowWidth, windowHeight);
 }
